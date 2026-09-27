@@ -16,6 +16,7 @@ export default function App() {
 
   const running = data?.state?.running === true;
   const queue = data?.queue || { pending: 0, processing: 0, success: 0, failed: 0 };
+  const services = data?.services; 
 
   const handleSync = useCallback(async () => {
     if (running || triggering) return;
@@ -55,6 +56,7 @@ export default function App() {
         running={running}
         lastUpdate={lastUpdate}
         logsConnected={connected}
+        services={services}
       />
 
       <StatsGrid queue={queue} />

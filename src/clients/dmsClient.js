@@ -1,7 +1,9 @@
+// src/clients/dmsClient.js
 const axios = require("axios");
 const FormData = require("form-data");
 const env = require("../config/env");
 const logger = require("../logger");
+const serviceHealth = require("../services/serviceHealth");
 
 const dmsHttp = axios.create({
   baseURL: env.DMS_BASE_URL,
@@ -46,42 +48,67 @@ async function ingestToDms({
     contentType: file.contentType,
   });
 
-  logger.debug("Sending to DMS", {
-    requestId,
-    sourceKey: cbsMeta?.sourceKey ?? null,
-    fileName: file.fileName,
-    sizeBytes: file.buffer.length,
-    mime: file.contentType,
-  });
+  const startedAt = Date.now();
 
-  const res = await dmsHttp.post("/api/documents/ingest", form, {
-    headers: { ...form.getHeaders() },
-    maxBodyLength: Infinity,
-    maxContentLength: Infinity,
-  });
+  try {
+    const res = await dmsHttp.post("/api/documents/ingest", form, {
+      headers: { ...form.getHeaders() },
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+    });
 
-  logger.info("DMS response received", {
-    requestId,
-    cbsSourceKey: cbsMeta?.sourceKey,
-    success: res.data?.success,
-    documentId: res.data?.data?.documentId,
-  });
+    const ms = Date.now() - startedAt;
 
-  // ═══════════════════════════════════════════════════════════════
-  // ⚠️  Contract: only return if DMS said success: true
-  // Otherwise throw — caller keeps doc in Redis for retry
-  // ═══════════════════════════════════════════════════════════════
-  if (res.data?.success !== true) {
-    const err = new Error(
-      `DMS returned success=${res.data?.success} for sourceKey=${cbsMeta?.sourceKey}: ` +
-      `${res.data?.message || "unknown"}`
-    );
-    err.response = res;
-    err.nonRetryable = true;
+    if (res.data?.success !== true) {
+      serviceHealth.recordFailure("DMS", {
+        error: `success=false: ${res.data?.message || "unknown"}`,
+        latencyMs: ms,
+        method: "POST",
+        url: "/api/documents/ingest",
+        httpStatus: res.status,
+      });
+
+      const err = new Error(
+        `DMS returned success=false for sourceKey=${cbsMeta?.sourceKey}: ${res.data?.message || "unknown"}`
+      );
+      err.response = res;
+      err.nonRetryable = true;
+      throw err;
+    }
+
+    serviceHealth.recordSuccess("DMS", {
+      latencyMs: ms,
+      method: "POST",
+      url: "/api/documents/ingest",
+    });
+
+    logger.info("DMS ingest ok", {
+      requestId,
+      cbsSourceKey: cbsMeta?.sourceKey,
+      dmsDocumentId: res.data?.data?.documentId,
+      ms,
+    });
+    return res.data;
+  } catch (err) {
+    if (!err.nonRetryable) {
+      serviceHealth.recordFailure("DMS", {
+        error: err.message,
+        latencyMs: Date.now() - startedAt,
+        method: "POST",
+        url: "/api/documents/ingest",
+        httpStatus: err.response?.status,
+      });
+    }
+
+    logger.error("DMS ingest failed", {
+      requestId,
+      cbsSourceKey: cbsMeta?.sourceKey,
+      status: err.response?.status,
+      error: err.message,
+      ms: Date.now() - startedAt,
+    });
     throw err;
   }
-
-  return res.data;
 }
 
 module.exports = { ingestToDms };
