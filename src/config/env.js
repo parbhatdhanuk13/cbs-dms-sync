@@ -18,11 +18,11 @@ const schema = z.object({
 
   SYNC_FROM_DATE: z.string(),
   SYNC_TO_DATE: z.string(),
-  SYNC_DOCUMENT_TYPE: z.coerce.number().default(-1),
-  SYNC_BRANCH: z.coerce.number().default(-1),
 
-  DOWNLOAD_CONCURRENCY: z.coerce.number().default(2),
-  DMS_CONCURRENCY: z.coerce.number().default(3),
+  REDIS_HOST: z.string().default("127.0.0.1"),
+  REDIS_PORT: z.coerce.number().default(6379),
+  REDIS_PASSWORD: z.string().optional().default(""),
+  REDIS_DB: z.coerce.number().default(0),
 
   MAX_RETRY_ATTEMPTS: z.coerce.number().default(5),
   RETRY_BACKOFF_MS: z.coerce.number().default(5000),

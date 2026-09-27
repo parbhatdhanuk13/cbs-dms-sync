@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js",
+    "start": "pm2 start src/index.js  --name cbs-dms-bridge",
     "dev": "nodemon src/index.js"
   },
   "dependencies": {
@@ -12,6 +12,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.21.0",
     "form-data": "^4.0.0",
+    "ioredis": "^6.0.0",
     "p-limit": "^3.1.0",
     "uuid": "^14.0.2",
     "winston": "^3.14.2",

@@ -1,9 +1,8 @@
 // CBS branchId → DMS branchId
 const BRANCH_MAP = {
-  1: 2,    // Kathmandu
-  2: 3,    // Pokhara
-  7: 8,
-  10: 12,
+  4: 1,    // pokhara
+  5: 2,    // Dhangadhi
+  6: 3,   // Baneshwor
 };
 
 // CBS documentTypeId → DMS attachmentTypeId

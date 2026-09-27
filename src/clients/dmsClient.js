@@ -9,10 +9,6 @@ const dmsHttp = axios.create({
   headers: { "x-api-key": env.DMS_API_KEY },
 });
 
-/**
- * Append a form field only if value is meaningful.
- * Skips null, undefined, empty, "null", "undefined".
- */
 function appendIfPresent(form, key, value) {
   if (value === undefined || value === null) return;
   const str = String(value).trim();
@@ -29,28 +25,22 @@ async function ingestToDms({
   cbsMeta,
   requestId,
 }) {
-  // Safety — must be bytes
   if (!Buffer.isBuffer(file.buffer)) {
     throw new Error(
-      `ingestToDms: file.buffer must be a Buffer (got ${typeof file.buffer}). ` +
-      `Did you forget Buffer.from(base64, "base64")?`
+      `ingestToDms: file.buffer must be a Buffer (got ${typeof file.buffer})`
     );
   }
 
   const form = new FormData();
-
-  // ─── Required fields ───
   form.append("documentTypeId", String(documentTypeId));
   form.append("document_index_values", JSON.stringify(documentIndexValues));
   form.append("branchId", String(branchId));
   form.append("attachmentTypeId_1", String(attachmentTypeId));
 
-  // ─── Optional CBS metadata — never breaks if missing ───
-  appendIfPresent(form, "cbsSourceKey",       cbsMeta?.sourceKey);
-  appendIfPresent(form, "cbsDocumentTypeId",  cbsMeta?.documentTypeId);
+  appendIfPresent(form, "cbsSourceKey", cbsMeta?.sourceKey);
+  appendIfPresent(form, "cbsDocumentTypeId", cbsMeta?.documentTypeId);
   appendIfPresent(form, "cbsDocumentSubType", cbsMeta?.documentSubType);
 
-  // ─── File (raw bytes) ───
   form.append("files_1", file.buffer, {
     filename: file.fileName,
     contentType: file.contentType,
@@ -69,6 +59,27 @@ async function ingestToDms({
     maxBodyLength: Infinity,
     maxContentLength: Infinity,
   });
+
+  logger.info("DMS response received", {
+    requestId,
+    cbsSourceKey: cbsMeta?.sourceKey,
+    success: res.data?.success,
+    documentId: res.data?.data?.documentId,
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // ⚠️  Contract: only return if DMS said success: true
+  // Otherwise throw — caller keeps doc in Redis for retry
+  // ═══════════════════════════════════════════════════════════════
+  if (res.data?.success !== true) {
+    const err = new Error(
+      `DMS returned success=${res.data?.success} for sourceKey=${cbsMeta?.sourceKey}: ` +
+      `${res.data?.message || "unknown"}`
+    );
+    err.response = res;
+    err.nonRetryable = true;
+    throw err;
+  }
 
   return res.data;
 }

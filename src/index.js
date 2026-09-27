@@ -1,26 +1,32 @@
 const express = require("express");
 const env = require("./config/env");
 const logger = require("./logger");
+const redis = require("./services/redisClient");
 const { login } = require("./services/tokenManager");
 const adminRoutes = require("./routes/admin");
 
 async function bootstrap() {
   try {
-    // Warm token at boot
+    await redis.ping();
+    logger.info("Redis ping ok");
+
     await login();
     logger.info("CBS token warmed");
 
     const app = express();
-    app.use(express.json({ limit: "10mb" }));
+    app.use(express.json({ limit: "2mb" }));
     app.use("/admin", adminRoutes);
 
     const server = app.listen(env.PORT, () => {
-      logger.info("Server started", { port: env.PORT, env: env.NODE_ENV });
+      logger.info("Server started", { port: env.PORT });
     });
 
     const shutdown = async (sig) => {
       logger.warn("Shutting down", { signal: sig });
-      server.close(() => process.exit(0));
+      server.close(async () => {
+        await redis.quit();
+        process.exit(0);
+      });
       setTimeout(() => process.exit(1), 15000);
     };
     process.on("SIGINT", () => shutdown("SIGINT"));
