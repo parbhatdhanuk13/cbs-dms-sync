@@ -1,4 +1,3 @@
-// src/index.js
 const path = require("path");
 const express = require("express");
 const env = require("./config/env");
@@ -6,39 +5,32 @@ const logger = require("./logger");
 const redis = require("./services/redisClient");
 const { login } = require("./services/tokenManager");
 const adminRoutes = require("./routes/admin");
-const { router: uiRouter } = require("./routes/ui");
+const uiRouter = require("./routes/ui").router;
 
 async function bootstrap() {
   try {
-    // ─── Warm up dependencies ───
     await redis.ping();
     logger.info("Redis ping ok");
 
     await login();
     logger.info("CBS token warmed");
 
-    // ─── Express app ───
     const app = express();
     app.use(express.json({ limit: "2mb" }));
 
-    // ─── API routes ───
+    // API routes
     app.use("/admin", adminRoutes);
     app.use("/ui", uiRouter);
 
-    // ─── Serve React build (production) ───
+    // Serve React build (in production)
     const uiDistPath = path.join(__dirname, "..", "ui", "dist");
     app.use(express.static(uiDistPath));
 
-    // ─── SPA fallback — any non-API path serves index.html ───
+    // SPA fallback — any non-API route serves index.html
     app.get(/^(?!\/(admin|ui)).*/, (req, res) => {
-      res.sendFile(path.join(uiDistPath, "index.html"), (err) => {
-        if (err) {
-          res.status(404).send("UI build not found. Run 'cd ui && npm run build' first.");
-        }
-      });
+      res.sendFile(path.join(uiDistPath, "index.html"));
     });
 
-    // ─── Start server ───
     const server = app.listen(env.PORT, () => {
       logger.info("Server started", {
         port: env.PORT,
@@ -47,13 +39,10 @@ async function bootstrap() {
       });
     });
 
-    // ─── Graceful shutdown ───
     const shutdown = async (sig) => {
       logger.warn("Shutting down", { signal: sig });
       server.close(async () => {
-        try {
-          await redis.quit();
-        } catch {}
+        await redis.quit();
         process.exit(0);
       });
       setTimeout(() => process.exit(1), 15000);
@@ -66,7 +55,6 @@ async function bootstrap() {
   }
 }
 
-// ─── Global error handlers ───
 process.on("unhandledRejection", (err) =>
   logger.error("Unhandled rejection", { error: err?.message, stack: err?.stack })
 );

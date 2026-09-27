@@ -1,14 +1,16 @@
+// src/logger/index.js
 const path = require("path");
 const fs = require("fs");
 const winston = require("winston");
 require("winston-daily-rotate-file");
 const env = require("../config/env");
+const { StreamTransport } = require("./logStream");
 
 if (!fs.existsSync(env.LOG_DIR)) fs.mkdirSync(env.LOG_DIR, { recursive: true });
 
 const { combine, timestamp, printf, colorize, errors, json, splat } = winston.format;
 
-// Console format (dev-friendly)
+// ─── Console format (dev-friendly) ───
 const consoleFormat = combine(
   colorize(),
   timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
@@ -20,15 +22,10 @@ const consoleFormat = combine(
   })
 );
 
-// File format (JSON, one line per log)
-const fileFormat = combine(
-  timestamp(),
-  errors({ stack: true }),
-  splat(),
-  json()
-);
+// ─── File format (JSON, one line per log) ───
+const fileFormat = combine(timestamp(), errors({ stack: true }), splat(), json());
 
-// All logs → daily rotated
+// ─── Transports ───
 const combinedFile = new winston.transports.DailyRotateFile({
   filename: path.join(env.LOG_DIR, "bridge-%DATE%.log"),
   datePattern: "YYYY-MM-DD",
@@ -39,7 +36,6 @@ const combinedFile = new winston.transports.DailyRotateFile({
   level: env.LOG_LEVEL,
 });
 
-// Errors only → daily rotated
 const errorFile = new winston.transports.DailyRotateFile({
   filename: path.join(env.LOG_DIR, "error-%DATE%.log"),
   datePattern: "YYYY-MM-DD",
@@ -50,7 +46,6 @@ const errorFile = new winston.transports.DailyRotateFile({
   level: "error",
 });
 
-// Sync-specific log (one line per document — easy to grep)
 const syncFile = new winston.transports.DailyRotateFile({
   filename: path.join(env.LOG_DIR, "sync-%DATE%.log"),
   datePattern: "YYYY-MM-DD",
@@ -61,6 +56,13 @@ const syncFile = new winston.transports.DailyRotateFile({
   level: "info",
 });
 
+const streamTransport = new StreamTransport();
+
+const consoleTransport = new winston.transports.Console({
+  format: env.NODE_ENV === "development" ? consoleFormat : fileFormat,
+});
+
+// ─── Main logger ───
 const logger = winston.createLogger({
   level: env.LOG_LEVEL,
   defaultMeta: { service: "cbs-dms-bridge" },
@@ -68,14 +70,13 @@ const logger = winston.createLogger({
     combinedFile,
     errorFile,
     syncFile,
-    new winston.transports.Console({
-      format: env.NODE_ENV === "development" ? consoleFormat : fileFormat,
-    }),
+    streamTransport,
+    consoleTransport,
   ],
   exitOnError: false,
 });
 
-// Child logger factory — adds context to every log line
+// ─── Child logger factory (adds context to every log) ───
 logger.child = (meta) => {
   return winston.createLogger({
     level: env.LOG_LEVEL,
@@ -84,14 +85,13 @@ logger.child = (meta) => {
       combinedFile,
       errorFile,
       syncFile,
-      new winston.transports.Console({
-        format: env.NODE_ENV === "development" ? consoleFormat : fileFormat,
-      }),
+      streamTransport,
+      consoleTransport,
     ],
   });
 };
 
-// Redaction helper — call before logging any config object
+// ─── Redaction helper ───
 const SENSITIVE = new Set(["password", "token", "authorization", "x-api-key", "apikey"]);
 logger.redact = function redact(obj) {
   if (!obj || typeof obj !== "object") return obj;
