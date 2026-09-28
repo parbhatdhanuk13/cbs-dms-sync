@@ -7,15 +7,15 @@ const BRANCH_MAP = {
 
 // CBS documentTypeId → DMS attachmentTypeId
 const DOCUMENT_TYPE_MAP = {
-  1: 2,   // Identity documents
-  2: 3,   // Loan-file documents
-  3: 4,   // Deposit vouchers
-  4: 5,   // General vouchers
-  5: 6,   // Inter-branch transfer vouchers
+  1: 1068,   // Member Identity documents
+  2: 1069,   // Loan-file documents
+  3: 1070,   // Deposit vouchers
+  4: 1071,   // General vouchers
+  5: 1072,   // Inter-branch transfer(IBT) vouchers
 };
 
 // DMS container documentTypeId
-const DMS_DOCUMENT_TYPE_ID = 1;
+const DMS_DOCUMENT_TYPE_ID = 1067;
 
 // DMS document_index_ids
 const DOCUMENT_INDEX_IDS = {
